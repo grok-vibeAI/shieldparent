@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import { ManagedDevice } from '../types';
 import { 
   Smartphone, Tablet, Laptop, Wifi, WifiOff, Lock, Unlock, ShieldAlert, ShieldCheck, 
@@ -12,6 +13,20 @@ interface DeviceControlViewProps {
   isLocked: boolean;
   onUnlockRequest: () => void;
   onFilterLogToDevice: (deviceName: string) => void;
+}
+
+function QrCanvas({ data }: { data: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (canvasRef.current && data) {
+      QRCode.toCanvas(canvasRef.current, data, {
+        width: 160,
+        margin: 1,
+        color: { dark: '#0f172a', light: '#ffffff' },
+      });
+    }
+  }, [data]);
+  return <canvas ref={canvasRef} className="w-full h-full rounded-lg" />;
 }
 
 export function DeviceControlView({ 
@@ -544,35 +559,14 @@ export function DeviceControlView({
 
                   {/* QR Image Container */}
                   <div className="w-[180px] h-[180px] bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-center shadow-inner relative">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                        selectedDeviceForQr === 'global'
-                          ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=${new Date().toISOString()}&key=8b2a-fd3c`
-                          : (() => {
-                              const dev = devices.find(d => d.id === selectedDeviceForQr);
-                              return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
-                            })()
-                      )}`}
-                      alt="GuardianNet Enrollment QR Code"
-                      className="w-full h-full object-contain filter hover:brightness-95 cursor-zoom-in transition-all"
-                      onError={(e) => {
-                        // Fallback in case of absolute offline network bounds
-                        e.currentTarget.style.display = 'none';
-                        const fallbackTxt = document.getElementById('qr-offline-fallback');
-                        if (fallbackTxt) fallbackTxt.style.display = 'flex';
-                      }}
-                    />
-                    
-                    {/* Offline Pixel Matrix Fallback SVG */}
-                    <div 
-                      id="qr-offline-fallback" 
-                      style={{ display: 'none' }} 
-                      className="w-full h-full flex flex-col items-center justify-center p-3 text-slate-400 gap-1.5"
-                    >
-                      <QrCode className="w-12 h-12 text-slate-300" />
-                      <p className="text-[9px] font-bold">Secure Local Key Block Active</p>
-                      <p className="text-[8px] max-w-[120px] text-slate-400 leading-none">Online connection handles high-res code refresh.</p>
-                    </div>
+                    <QrCanvas data={
+                      selectedDeviceForQr === 'global'
+                        ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=${new Date().toISOString()}&key=8b2a-fd3c`
+                        : (() => {
+                            const dev = devices.find(d => d.id === selectedDeviceForQr);
+                            return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
+                          })()
+                    } />
                   </div>
 
                   {/* Status labels */}
