@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ManagedDevice } from '../types';
-import { Camera, RefreshCw, AlertCircle, CheckCircle, Smartphone, Info, ChevronRight } from 'lucide-react';
+import { Camera, RefreshCw, AlertCircle, CheckCircle, Smartphone, Info, ChevronRight, Focus, Zap } from 'lucide-react';
 
 interface CompanionQrScannerProps {
   onDeviceEnrolled: (device: ManagedDevice) => void;
@@ -65,6 +65,8 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
   const [scannedDevice, setScannedDevice] = useState<ManagedDevice | null>(null);
   const [manualPayload, setManualPayload] = useState<string>('');
   const [enrolling, setEnrolling] = useState<boolean>(false);
+  const [focusStatus, setFocusStatus] = useState<string>('Auto-focusing...');
+  const [detectionQuality, setDetectionQuality] = useState<number>(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,7 +74,8 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
   const animFrameRef = useRef<number | null>(null);
   const lastScanRef = useRef<number>(0);
   const consecutiveFailuresRef = useRef<number>(0);
-  const detectionAttemptsRef = useRef<number>(0);
+  const focusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const videoTrackRef = useRef<MediaStreamVideoTrack | null>(null);
 
   const parsePayload = (text: string): ManagedDevice => {
     let parsed: Partial<ManagedDevice> = {};
@@ -133,7 +136,6 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
       setScannedDevice(device);
       setEnrolling(true);
       stopScanner();
-      // ✅ INSTANTLY enroll device immediately after QR detection
       onDeviceEnrolled(device);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unrecognized format';
@@ -146,11 +148,100 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
     }
+    if (focusIntervalRef.current) {
+      clearInterval(focusIntervalRef.current);
+      focusIntervalRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
     setScannerActive(false);
+    setFocusStatus('');
+  };
+
+  // ✅ Advanced focus handling
+  const applyAdvancedFocus = async (videoTrack: MediaStreamVideoTrack): Promise<void> => {
+    try {
+      const capabilities = videoTrack.getCapabilities?.() as Record<string, unknown>;
+      
+      // Try multiple focus modes
+      const focusModes = ['continuous', 'manual', 'auto'];
+      
+      for (const mode of focusModes) {
+        try {
+          await videoTrack.applyConstraints({
+            advanced: [{ focusMode: mode as ConstraintSetType }] as unknown as MediaConstraintSet[]
+          });
+          setFocusStatus(`✓ Focus: ${mode}`);
+          break;
+        } catch {
+          continue;
+        }
+      }
+
+      // Set ideal focus distance for QR codes (typically 10-20cm)
+      try {
+        await videoTrack.applyConstraints({
+          advanced: [{ focusDistance: 0.3 }] as unknown as MediaConstraintSet[]
+        });
+      } catch {
+        // Not supported
+      }
+
+      // Enable exposure control
+      try {
+        await videoTrack.applyConstraints({
+          advanced: [{ exposureMode: 'continuous' }] as unknown as MediaConstraintSet[]
+        });
+      } catch {
+        // Not supported
+      }
+
+      // Zoom for better focus
+      try {
+        if (capabilities.zoom) {
+          await videoTrack.applyConstraints({
+            advanced: [{ zoom: 1.5 }] as unknown as MediaConstraintSet[]
+          });
+        }
+      } catch {
+        // Not supported
+      }
+    } catch (err) {
+      console.log('Advanced focus not fully supported');
+    }
+  };
+
+  // ✅ Enhanced image processing for QR detection
+  const enhanceImageForQR = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): HTMLCanvasElement => {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // Calculate histogram for better contrast
+    let minPixel = 255;
+    let maxPixel = 0;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      minPixel = Math.min(minPixel, gray);
+      maxPixel = Math.max(maxPixel, gray);
+    }
+
+    // Adaptive contrast enhancement
+    const range = maxPixel - minPixel || 1;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      const normalized = ((gray - minPixel) / range) * 255;
+      const threshold = normalized > 128 ? 255 : 0;
+      
+      data[i] = threshold;
+      data[i + 1] = threshold;
+      data[i + 2] = threshold;
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
   };
 
   const scanLoop = async (): Promise<void> => {
@@ -163,8 +254,7 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
     }
 
     const now = Date.now();
-    // Aggressive throttle: 100ms (10x per second) instead of 500ms
-    const SCAN_INTERVAL = 100;
+    const SCAN_INTERVAL = 50; // ⚡ Ultra-fast: 20 scans per second
     if (now - lastScanRef.current < SCAN_INTERVAL) {
       animFrameRef.current = requestAnimationFrame(scanLoop);
       return;
@@ -181,83 +271,122 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
-    // Multi-attempt detection with adaptive resolution
-    const detectionAttempts = consecutiveFailuresRef.current > 10 ? 3 : 2;
-    
     try {
       if (typeof BarcodeDetector !== 'undefined') {
         const detector = new BarcodeDetector({ formats: ['qr_code'] });
-        
-        // Attempt 1: Full frame detection
+
+        // Attempt 1: Original frame (full)
         let codes = await detector.detect(canvas);
         if (codes.length > 0) {
           consecutiveFailuresRef.current = 0;
+          setDetectionQuality(100);
           handleScanned(codes[0].rawValue);
           return;
         }
-        
-        // Attempt 2: Center region detection (cropped for speed)
-        if (detectionAttempts >= 2) {
-          const centerCanvas = document.createElement('canvas');
-          const centerCtx = centerCanvas.getContext('2d');
-          if (centerCtx) {
-            const centerSize = Math.min(canvas.width, canvas.height) * 0.7;
-            const startX = (canvas.width - centerSize) / 2;
-            const startY = (canvas.height - centerSize) / 2;
-            
-            centerCanvas.width = centerSize;
-            centerCanvas.height = centerSize;
-            centerCtx.drawImage(
-              canvas,
-              startX, startY, centerSize, centerSize,
-              0, 0, centerSize, centerSize
-            );
-            
-            codes = await detector.detect(centerCanvas);
-            if (codes.length > 0) {
-              consecutiveFailuresRef.current = 0;
-              handleScanned(codes[0].rawValue);
-              return;
-            }
+
+        // Attempt 2: Enhanced contrast version
+        const enhancedCanvas = document.createElement('canvas');
+        enhancedCanvas.width = canvas.width;
+        enhancedCanvas.height = canvas.height;
+        const enhancedCtx = enhancedCanvas.getContext('2d');
+        if (enhancedCtx) {
+          enhancedCtx.drawImage(canvas, 0, 0);
+          enhanceImageForQR(enhancedCtx, enhancedCanvas);
+          
+          codes = await detector.detect(enhancedCanvas);
+          if (codes.length > 0) {
+            consecutiveFailuresRef.current = 0;
+            setDetectionQuality(85);
+            handleScanned(codes[0].rawValue);
+            return;
           }
         }
-        
-        // Attempt 3: High-contrast enhancement for difficult lighting
-        if (detectionAttempts >= 3) {
-          const enhancedCanvas = document.createElement('canvas');
-          const enhancedCtx = enhancedCanvas.getContext('2d');
-          if (enhancedCtx) {
-            enhancedCanvas.width = canvas.width;
-            enhancedCanvas.height = canvas.height;
-            enhancedCtx.drawImage(canvas, 0, 0);
-            
-            // Enhance contrast and brightness for better detection
-            const imageData = enhancedCtx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Attempt 3: Center-focused region
+        const centerSize = Math.min(canvas.width, canvas.height) * 0.8;
+        const startX = (canvas.width - centerSize) / 2;
+        const startY = (canvas.height - centerSize) / 2;
+
+        const centerCanvas = document.createElement('canvas');
+        centerCanvas.width = centerSize;
+        centerCanvas.height = centerSize;
+        const centerCtx = centerCanvas.getContext('2d');
+        if (centerCtx) {
+          centerCtx.drawImage(
+            canvas,
+            startX, startY, centerSize, centerSize,
+            0, 0, centerSize, centerSize
+          );
+          
+          codes = await detector.detect(centerCanvas);
+          if (codes.length > 0) {
+            consecutiveFailuresRef.current = 0;
+            setDetectionQuality(90);
+            handleScanned(codes[0].rawValue);
+            return;
+          }
+        }
+
+        // Attempt 4: Small center region (most critical area)
+        const smallSize = Math.min(canvas.width, canvas.height) * 0.5;
+        const smallStartX = (canvas.width - smallSize) / 2;
+        const smallStartY = (canvas.height - smallSize) / 2;
+
+        const smallCanvas = document.createElement('canvas');
+        smallCanvas.width = smallSize;
+        smallCanvas.height = smallSize;
+        const smallCtx = smallCanvas.getContext('2d');
+        if (smallCtx) {
+          smallCtx.drawImage(
+            canvas,
+            smallStartX, smallStartY, smallSize, smallSize,
+            0, 0, smallSize, smallSize
+          );
+          
+          codes = await detector.detect(smallCanvas);
+          if (codes.length > 0) {
+            consecutiveFailuresRef.current = 0;
+            setDetectionQuality(95);
+            handleScanned(codes[0].rawValue);
+            return;
+          }
+        }
+
+        // Attempt 5: Super contrast enhancement for poor lighting
+        if (consecutiveFailuresRef.current > 20) {
+          const superEnhancedCanvas = document.createElement('canvas');
+          superEnhancedCanvas.width = canvas.width;
+          superEnhancedCanvas.height = canvas.height;
+          const superCtx = superEnhancedCanvas.getContext('2d');
+          if (superCtx) {
+            superCtx.drawImage(canvas, 0, 0);
+            const imageData = superCtx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
-            
+
+            // Extreme contrast boost
             for (let i = 0; i < data.length; i += 4) {
-              // Convert to grayscale and increase contrast
               const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-              const adjusted = gray > 128 ? Math.min(255, gray + 40) : Math.max(0, gray - 40);
-              data[i] = adjusted;
-              data[i + 1] = adjusted;
-              data[i + 2] = adjusted;
+              const extreme = gray > 100 ? 255 : 0;
+              data[i] = extreme;
+              data[i + 1] = extreme;
+              data[i + 2] = extreme;
             }
-            
-            enhancedCtx.putImageData(imageData, 0, 0);
-            codes = await detector.detect(enhancedCanvas);
+            superCtx.putImageData(imageData, 0, 0);
+
+            codes = await detector.detect(superEnhancedCanvas);
             if (codes.length > 0) {
               consecutiveFailuresRef.current = 0;
+              setDetectionQuality(70);
               handleScanned(codes[0].rawValue);
               return;
             }
           }
         }
-        
+
         consecutiveFailuresRef.current++;
+        setDetectionQuality(Math.max(0, 100 - consecutiveFailuresRef.current * 5));
       }
     } catch (_err: unknown) {
-      // BarcodeDetector not supported — silently continue
       consecutiveFailuresRef.current++;
     }
 
@@ -267,45 +396,50 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
   const startScanner = async (): Promise<void> => {
     setErrorStatus('');
     setScannedDevice(null);
+    setDetectionQuality(0);
     consecutiveFailuresRef.current = 0;
+    
     try {
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: 'environment',
-          // Add focus and resolution constraints for better detection
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          focusMode: 'continuous' as unknown as boolean
+          width: { ideal: 1920, min: 640 },
+          height: { ideal: 1440, min: 480 },
+          // Optimize for QR code scanning
+          aspectRatio: { ideal: 4 / 3 }
         }
       };
-      
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
-      
-      // Try to set camera focus
-      try {
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack && 'getSettings' in videoTrack && 'getCapabilities' in videoTrack) {
-          const capabilities = videoTrack.getCapabilities?.() as unknown;
-          if ((capabilities as Record<string, unknown>)?.focusMode) {
-            await videoTrack.applyConstraints({
-              advanced: [{ focusMode: 'continuous' }] as unknown as MediaConstraintSet[]
-            });
-          }
-        }
-      } catch (_err) {
-        // Focus not supported, continue anyway
-      }
-      
+
+      const videoTrack = stream.getVideoTracks()[0] as MediaStreamVideoTrack;
+      videoTrackRef.current = videoTrack;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+
+      // Apply advanced focus settings
+      setFocusStatus('Applying focus...');
+      await applyAdvancedFocus(videoTrack);
+
+      // Continuous focus re-application every 1 second
+      focusIntervalRef.current = setInterval(() => {
+        if (videoTrackRef.current) {
+          applyAdvancedFocus(videoTrackRef.current).catch(() => {
+            // Silently continue
+          });
+        }
+      }, 1000);
+
       setScannerActive(true);
       animFrameRef.current = requestAnimationFrame(scanLoop);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Please allow camera permission and try again.';
-      setErrorStatus(`Camera access denied: ${msg}`);
+      const msg = err instanceof Error ? err.message : 'Camera permission denied.';
+      setErrorStatus(`❌ Camera Error: ${msg}`);
+      setFocusStatus('');
     }
   };
 
@@ -342,7 +476,9 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
           <div>
             <span>{errorStatus}</span>
             <p className="text-[10px] text-red-500 font-normal mt-1">
-              Try starting the camera again, use a demo device below, or paste the payload manually.
+              • Keep QR code in center of screen (8-12cm distance)
+              • Ensure good lighting
+              • Hold phone steady
             </p>
           </div>
         </div>
@@ -373,10 +509,10 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
         <div className="space-y-4">
 
           {/* Camera viewport */}
-          <div className="relative bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center min-h-[220px]">
+          <div className="relative bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center min-h-[280px]">
             <video
               ref={videoRef}
-              className={`w-full max-h-[220px] object-cover ${scannerActive ? 'block' : 'hidden'}`}
+              className={`w-full max-h-[280px] object-cover ${scannerActive ? 'block' : 'hidden'}`}
               playsInline
               muted
             />
@@ -384,14 +520,30 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
 
             {scannerActive && (
               <>
-                <div className="absolute top-2 left-2 bg-slate-900/85 border border-slate-800 text-[9px] font-black text-emerald-400 font-mono px-2 py-0.5 rounded uppercase flex items-center gap-1 z-10 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                  ⚡ Ultra-fast scanning active
+                {/* Focus indicator */}
+                <div className="absolute top-3 left-3 bg-slate-900/90 border border-slate-700 text-[9px] font-black text-cyan-400 font-mono px-2 py-1 rounded uppercase flex items-center gap-1.5 z-20">
+                  <Focus className="w-3 h-3 animate-pulse" />
+                  {focusStatus}
                 </div>
-                <div className="absolute inset-x-0 top-1/2 h-0.5 bg-emerald-500/80 shadow-md shadow-emerald-500 animate-pulse pointer-events-none" />
+
+                {/* QR Center frame guide */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                  <div className="w-40 h-40 border-2 border-emerald-400/50 rounded-lg"></div>
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-emerald-500/10"></div>
+                </div>
+
+                {/* Detection quality indicator */}
+                <div className="absolute top-3 right-3 bg-slate-900/90 border border-slate-700 text-[9px] font-black text-lime-400 font-mono px-2 py-1 rounded uppercase flex items-center gap-1.5 z-20">
+                  <Zap className="w-3 h-3" />
+                  {detectionQuality}% Ready
+                </div>
+
+                {/* Scanning line */}
+                <div className="absolute inset-x-0 top-1/2 h-0.5 bg-emerald-500 shadow-lg shadow-emerald-500 animate-pulse pointer-events-none" />
+
                 <button
                   onClick={stopScanner}
-                  className="absolute bottom-3 bg-red-600 hover:bg-red-700 text-white text-[10px] font-black px-3.5 py-1.5 rounded-lg cursor-pointer z-10 transition-colors"
+                  className="absolute bottom-3 bg-red-600 hover:bg-red-700 text-white text-[10px] font-black px-3.5 py-1.5 rounded-lg cursor-pointer z-20 transition-colors"
                 >
                   Stop Camera
                 </button>
@@ -404,14 +556,14 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
                   <Camera className="w-5 h-5" />
                 </div>
                 <div>
-                  <h6 className="font-extrabold text-xs text-white">Point camera at QR code</h6>
-                  <p className="text-[10px] text-slate-500 mt-1 font-semibold leading-normal">
-                    Device enrolls automatically the moment QR is detected — no extra steps.
+                  <h6 className="font-extrabold text-xs text-white">📷 Point Camera at QR Code</h6>
+                  <p className="text-[10px] text-slate-400 mt-2 font-semibold leading-relaxed">
+                    Position QR code in center · 8-12cm distance · Good lighting recommended
                   </p>
                 </div>
                 <button
                   onClick={() => { void startScanner(); }}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[11px] px-5 py-2 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-md"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[11px] px-5 py-2.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-md"
                 >
                   <Camera className="w-3.5 h-3.5" />
                   Start Camera
@@ -475,10 +627,13 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer Tips */}
       <div className="flex items-start gap-2 bg-slate-100 p-3 rounded-2xl text-[10px] border border-slate-200 text-slate-600 font-semibold mt-auto">
-        <Info className="w-4 h-4 text-indigo-500 shrink-0" />
-        <p>Device is enrolled <strong>automatically</strong> the moment the QR code is detected. No confirmation needed.</p>
+        <Info className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p><strong>Tips for best results:</strong></p>
+          <p className="text-slate-500">• Keep QR code in the center frame · Good lighting is important · Hold steady for 1-2 seconds</p>
+        </div>
       </div>
     </div>
   );
