@@ -196,6 +196,7 @@ export function DeviceControlView({
                   <div className="flex items-center gap-3">
                     <div className={`p-2.5 rounded-xl flex items-center justify-center ${
                       isBlocked ? 'bg-red-50 text-red-650' : isLockedScreen ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-700'
+                      isBlocked ? 'bg-red-50 text-red-600' : isLockedScreen ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-700'
                     }`}>
                       {isPhone ? <Smartphone className="w-5 h-5" /> : isTablet ? <Tablet className="w-5 h-5" /> : <Laptop className="w-5 h-5" />}
                     </div>
@@ -249,6 +250,7 @@ export function DeviceControlView({
                         device.internetBlocked
                           ? 'bg-red-100 border-red-300 text-red-700'
                           : 'bg-white border-slate-250 hover:bg-slate-100 text-slate-700'
+                          : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
                       }`}
                     >
                       {device.internetBlocked ? '🚫 BLOCKED' : '🟢 ALLOWED'}
@@ -267,6 +269,7 @@ export function DeviceControlView({
                         device.screenLocked
                           ? 'bg-amber-100 border-amber-300 text-amber-700 font-black animate-pulse'
                           : 'bg-white border-slate-250 hover:bg-slate-100 text-slate-700'
+                          : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
                       }`}
                     >
                       {device.screenLocked ? '⚡ LOCKED' : '🔓 OPEN'}
@@ -285,6 +288,7 @@ export function DeviceControlView({
                         device.blockAdult
                           ? 'bg-indigo-50 border-[#4f46e5]/30 text-[#4f46e5]'
                           : 'bg-white border-slate-250 hover:bg-slate-100 text-slate-500'
+                          : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-500'
                       }`}
                     >
                       {device.blockAdult ? '🛡️ FILTER ON' : '⚠️ OFF'}
@@ -350,6 +354,7 @@ export function DeviceControlView({
                     }
                   }}
                   className="w-full bg-white border border-slate-250 hover:bg-slate-50 text-slate-700 font-bold text-xs py-2 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                  className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs py-2 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95"
                 >
                   <Smartphone className="w-3.5 h-3.5 text-slate-500" />
                   Manual Form Entry
@@ -604,6 +609,7 @@ export function DeviceControlView({
                       onClick={() => {
                         const val = selectedDeviceForQr === 'global'
                           ? `guardiannet://enroll/global?parent=vibeai789%45gmail.com&timestamp=2026-06-06`
+                          ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=2026-06-06`
                           : `guardiannet://enroll/device?id=${selectedDeviceForQr}&uuid=${devices.find(d => d.id === selectedDeviceForQr)?.uuid}&dns=dns.guardiannet.family`;
                         navigator.clipboard.writeText(val);
                         setCopiedText(true);
@@ -628,6 +634,7 @@ export function DeviceControlView({
                 {selectedDeviceForQr === 'global' ? (
                   <div className="space-y-4">
                     <h4 className="text-xs font-black text-indigo-750 uppercase tracking-widest flex items-center gap-1.5">
+                    <h4 className="text-xs font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
                       <Settings className="w-4 h-4 text-indigo-600" />
                       Global Master Enrollment Procedure
                     </h4>
@@ -672,6 +679,7 @@ export function DeviceControlView({
                   <div className="space-y-4">
                     <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
                       <h4 className="text-xs font-black text-indigo-750 uppercase tracking-widest flex items-center gap-1.5">
+                      <h4 className="text-xs font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
                         <Smartphone className="w-4 h-4 text-indigo-600" />
                         Platform Sync: {devices.find(d => d.id === selectedDeviceForQr)?.platform} Profile Instructions
                       </h4>
@@ -777,6 +785,7 @@ export function DeviceControlView({
 
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-slate-150 bg-slate-50 flex items-center justify-end rounded-b-3xl">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end rounded-b-3xl">
               <button
                 onClick={() => setIsQrModalOpen(false)}
                 className="bg-slate-900 border border-slate-950 hover:bg-slate-800 text-white px-5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all"
