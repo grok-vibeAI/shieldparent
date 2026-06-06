@@ -35,7 +35,7 @@ const COMPANION_MOCK_PAYLOADS = [
   },
   {
     label: "Maya's Galaxy S24 (Android)",
-    payload: "guardiannet://enroll/mobile_client?name=Maya's Galaxy S24&platform=Android&uuid=e2fb-3c1a-8d9e-4a0b&ipAddress=192.168.1.148&blockAdult=true&blockGambling=false&blockSocial=true"
+    payload: "https://shieldparent.vercel.app/enroll?type=device&name=Maya's Galaxy S24&platform=Android&uuid=e2fb-3c1a-8d9e-4a0b&ipAddress=192.168.1.148&blockAdult=true&blockGambling=false&blockSocial=true"
   },
   {
     label: "Lucas's Lenovo Tab (Tablet)",
@@ -55,7 +55,7 @@ const COMPANION_MOCK_PAYLOADS = [
   },
   {
     label: "Caitlin's ChromeBook (ChromeOS)",
-    payload: "guardiannet://enroll/mobile_client?name=Caitlin's ChromeBook&platform=ChromeOS&uuid=0b2f-3c3e-1a8d-9e4a&ipAddress=192.168.1.162&blockAdult=false&blockGambling=true&blockSocial=true"
+    payload: "https://shieldparent.vercel.app/enroll?type=device&name=Caitlin's ChromeBook&platform=ChromeOS&uuid=0b2f-3c3e-1a8d-9e4a&ipAddress=192.168.1.162&blockAdult=false&blockGambling=true&blockSocial=true"
   }
 ];
 
@@ -75,8 +75,8 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
   const parsePayload = (text: string): ManagedDevice => {
     let parsed: Partial<ManagedDevice> = {};
 
-    if (text.startsWith('guardiannet://')) {
-      const url = new URL(text.replace('guardiannet://', 'http://x/'));
+    if (text.startsWith('guardiannet://') || text.startsWith('https://shieldparent.vercel.app/enroll')) {
+      const url = new URL(text.startsWith('guardiannet://') ? text.replace('guardiannet://', 'http://x/') : text);
       const p = url.searchParams;
       parsed = {
         name: p.get('name') ?? 'Unknown Device',
@@ -350,13 +350,13 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
                 Paste QR payload manually
               </label>
               <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-mono">
-                JSON / guardiannet://
+                JSON / https://
               </span>
             </div>
             <div className="flex gap-1.5">
               <input
                 type="text"
-                placeholder="Paste guardiannet:// or JSON string..."
+                placeholder="Paste https://shieldparent.vercel.app/enroll?... or JSON string..."
                 value={manualPayload}
                 onChange={e => setManualPayload(e.target.value)}
                 className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-mono text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400 placeholder-slate-400"

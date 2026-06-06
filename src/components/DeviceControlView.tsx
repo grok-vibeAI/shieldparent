@@ -561,10 +561,10 @@ export function DeviceControlView({
                   <div className="w-[180px] h-[180px] bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-center shadow-inner relative">
                     <QrCanvas data={
                       selectedDeviceForQr === 'global'
-                        ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=${new Date().toISOString()}&key=8b2a-fd3c`
+                        ? `https://shieldparent.vercel.app/enroll?type=global&parent=vibeai789%40gmail.com&timestamp=${new Date().toISOString()}&key=8b2a-fd3c`
                         : (() => {
                             const dev = devices.find(d => d.id === selectedDeviceForQr);
-                            return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
+                            return `https://shieldparent.vercel.app/enroll?type=device&name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}`;
                           })()
                     } />
                   </div>
@@ -593,10 +593,10 @@ export function DeviceControlView({
                       readOnly
                       value={
                         selectedDeviceForQr === 'global'
-                          ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=2026-06-06`
+                          ? `https://shieldparent.vercel.app/enroll?type=global&parent=vibeai789%40gmail.com`
                           : (() => {
                               const dev = devices.find(d => d.id === selectedDeviceForQr);
-                              return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
+                              return `https://shieldparent.vercel.app/enroll?type=device&name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}`;
                             })()
                       }
                       className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-mono text-slate-700 outline-none select-all"
@@ -604,10 +604,10 @@ export function DeviceControlView({
                     <button
                       onClick={() => {
                         const val = selectedDeviceForQr === 'global'
-                          ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=2026-06-06`
+                          ? `https://shieldparent.vercel.app/enroll?type=global&parent=vibeai789%40gmail.com`
                           : (() => {
                               const dev = devices.find(d => d.id === selectedDeviceForQr);
-                              return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
+                              return `https://shieldparent.vercel.app/enroll?type=device&name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}`;
                             })();
                         navigator.clipboard.writeText(val);
                         setCopiedText(true);
