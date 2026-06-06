@@ -195,7 +195,6 @@ export function DeviceControlView({
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`p-2.5 rounded-xl flex items-center justify-center ${
-                      isBlocked ? 'bg-red-50 text-red-650' : isLockedScreen ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-700'
                       isBlocked ? 'bg-red-50 text-red-600' : isLockedScreen ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-700'
                     }`}>
                       {isPhone ? <Smartphone className="w-5 h-5" /> : isTablet ? <Tablet className="w-5 h-5" /> : <Laptop className="w-5 h-5" />}
@@ -249,7 +248,6 @@ export function DeviceControlView({
                       className={`px-3 py-1.5 rounded-lg text-[10.5px] font-black uppercase tracking-wider border cursor-pointer transition-all ${
                         device.internetBlocked
                           ? 'bg-red-100 border-red-300 text-red-700'
-                          : 'bg-white border-slate-250 hover:bg-slate-100 text-slate-700'
                           : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
                       }`}
                     >
@@ -268,7 +266,6 @@ export function DeviceControlView({
                       className={`px-3 py-1.5 rounded-lg text-[10.5px] font-black uppercase tracking-wider border cursor-pointer transition-all ${
                         device.screenLocked
                           ? 'bg-amber-100 border-amber-300 text-amber-700 font-black animate-pulse'
-                          : 'bg-white border-slate-250 hover:bg-slate-100 text-slate-700'
                           : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
                       }`}
                     >
@@ -287,7 +284,6 @@ export function DeviceControlView({
                       className={`px-3 py-1.5 rounded-lg text-[10.5px] font-black uppercase tracking-wider border cursor-pointer transition-all ${
                         device.blockAdult
                           ? 'bg-indigo-50 border-[#4f46e5]/30 text-[#4f46e5]'
-                          : 'bg-white border-slate-250 hover:bg-slate-100 text-slate-500'
                           : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-500'
                       }`}
                     >
@@ -353,7 +349,7 @@ export function DeviceControlView({
                       setEnrollmentMode('form');
                     }
                   }}
-                  className="w-full bg-white border border-slate-250 hover:bg-slate-50 text-slate-700 font-bold text-xs py-2 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                  className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs py-2 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95"
                   className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs py-2 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95"
                 >
                   <Smartphone className="w-3.5 h-3.5 text-slate-500" />
@@ -552,7 +548,10 @@ export function DeviceControlView({
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
                         selectedDeviceForQr === 'global'
                           ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=${new Date().toISOString()}&key=8b2a-fd3c`
-                          : `guardiannet://enroll/device?id=${selectedDeviceForQr}&uuid=${devices.find(d => d.id === selectedDeviceForQr)?.uuid || 'unknown'}&platform=${devices.find(d => d.id === selectedDeviceForQr)?.platform || 'Android'}&dns=dns.guardiannet.family`
+                          : (() => {
+                              const dev = devices.find(d => d.id === selectedDeviceForQr);
+                              return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
+                            })()
                       )}`}
                       alt="GuardianNet Enrollment QR Code"
                       className="w-full h-full object-contain filter hover:brightness-95 cursor-zoom-in transition-all"
@@ -601,16 +600,21 @@ export function DeviceControlView({
                       value={
                         selectedDeviceForQr === 'global'
                           ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=2026-06-06`
-                          : `guardiannet://enroll/device?id=${selectedDeviceForQr}&uuid=${devices.find(d => d.id === selectedDeviceForQr)?.uuid}&dns=dns.guardiannet.family`
+                          : (() => {
+                              const dev = devices.find(d => d.id === selectedDeviceForQr);
+                              return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
+                            })()
                       }
                       className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10.5px] font-mono text-slate-700 outline-none select-all"
                     />
                     <button
                       onClick={() => {
                         const val = selectedDeviceForQr === 'global'
-                          ? `guardiannet://enroll/global?parent=vibeai789%45gmail.com&timestamp=2026-06-06`
                           ? `guardiannet://enroll/global?parent=vibeai789%40gmail.com&timestamp=2026-06-06`
-                          : `guardiannet://enroll/device?id=${selectedDeviceForQr}&uuid=${devices.find(d => d.id === selectedDeviceForQr)?.uuid}&dns=dns.guardiannet.family`;
+                          : (() => {
+                              const dev = devices.find(d => d.id === selectedDeviceForQr);
+                              return `guardiannet://enroll/device?name=${encodeURIComponent(dev?.name || 'Unknown Device')}&platform=${dev?.platform || 'Android'}&uuid=${dev?.uuid || 'unknown'}&ipAddress=${dev?.ipAddress || '192.168.1.100'}&blockAdult=${dev?.blockAdult}&blockGambling=${dev?.blockGambling}&blockSocial=${dev?.blockSocial}&dns=dns.guardiannet.family`;
+                            })();
                         navigator.clipboard.writeText(val);
                         setCopiedText(true);
                         setTimeout(() => setCopiedText(false), 2000);
@@ -633,7 +637,6 @@ export function DeviceControlView({
                 
                 {selectedDeviceForQr === 'global' ? (
                   <div className="space-y-4">
-                    <h4 className="text-xs font-black text-indigo-750 uppercase tracking-widest flex items-center gap-1.5">
                     <h4 className="text-xs font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
                       <Settings className="w-4 h-4 text-indigo-600" />
                       Global Master Enrollment Procedure
@@ -678,7 +681,6 @@ export function DeviceControlView({
                 ) : (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
-                      <h4 className="text-xs font-black text-indigo-750 uppercase tracking-widest flex items-center gap-1.5">
                       <h4 className="text-xs font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
                         <Smartphone className="w-4 h-4 text-indigo-600" />
                         Platform Sync: {devices.find(d => d.id === selectedDeviceForQr)?.platform} Profile Instructions
@@ -784,7 +786,6 @@ export function DeviceControlView({
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-150 bg-slate-50 flex items-center justify-end rounded-b-3xl">
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end rounded-b-3xl">
               <button
                 onClick={() => setIsQrModalOpen(false)}
