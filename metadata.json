@@ -1,0 +1,10 @@
+{
+  "name": "ShieldParent",
+  "description": "Parental control center and secure DNS filter. Configure blocking rules, monitor real-time network traffic, view activity reports, and secure settings with password lock.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
