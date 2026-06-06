@@ -76,6 +76,8 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
   const consecutiveFailuresRef = useRef<number>(0);
   const focusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoTrackRef = useRef<MediaStreamVideoTrack | null>(null);
+  const lastDetectionRef = useRef<string>('');
+  const detectionDebounceRef = useRef<number>(0);
 
   const parsePayload = (text: string): ManagedDevice => {
     let parsed: Partial<ManagedDevice> = {};
@@ -131,6 +133,19 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
   };
 
   const handleScanned = (text: string): void => {
+    const now = Date.now();
+    
+    // Debounce: Ignore if same code detected within 500ms or different code within 100ms
+    if (text === lastDetectionRef.current && now - detectionDebounceRef.current < 500) {
+      return;
+    }
+    if (text !== lastDetectionRef.current && now - detectionDebounceRef.current < 100) {
+      return;
+    }
+
+    lastDetectionRef.current = text;
+    detectionDebounceRef.current = now;
+
     try {
       const device = parsePayload(text);
       setScannedDevice(device);
@@ -254,7 +269,7 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
     }
 
     const now = Date.now();
-    const SCAN_INTERVAL = 50; // ⚡ Ultra-fast: 20 scans per second
+    const SCAN_INTERVAL = 100; // Optimized: 10 scans per second for smooth, efficient scanning
     if (now - lastScanRef.current < SCAN_INTERVAL) {
       animFrameRef.current = requestAnimationFrame(scanLoop);
       return;
@@ -275,7 +290,7 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
       if (typeof BarcodeDetector !== 'undefined') {
         const detector = new BarcodeDetector({ formats: ['qr_code'] });
 
-        // Attempt 1: Original frame (full)
+        // Attempt 1: Original frame (full) - fastest and most reliable
         let codes = await detector.detect(canvas);
         if (codes.length > 0) {
           consecutiveFailuresRef.current = 0;
@@ -284,26 +299,8 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
           return;
         }
 
-        // Attempt 2: Enhanced contrast version
-        const enhancedCanvas = document.createElement('canvas');
-        enhancedCanvas.width = canvas.width;
-        enhancedCanvas.height = canvas.height;
-        const enhancedCtx = enhancedCanvas.getContext('2d');
-        if (enhancedCtx) {
-          enhancedCtx.drawImage(canvas, 0, 0);
-          enhanceImageForQR(enhancedCtx, enhancedCanvas);
-          
-          codes = await detector.detect(enhancedCanvas);
-          if (codes.length > 0) {
-            consecutiveFailuresRef.current = 0;
-            setDetectionQuality(85);
-            handleScanned(codes[0].rawValue);
-            return;
-          }
-        }
-
-        // Attempt 3: Center-focused region
-        const centerSize = Math.min(canvas.width, canvas.height) * 0.8;
+        // Attempt 2: Center-focused region (most common case)
+        const centerSize = Math.min(canvas.width, canvas.height) * 0.75;
         const startX = (canvas.width - centerSize) / 2;
         const startY = (canvas.height - centerSize) / 2;
 
@@ -321,13 +318,31 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
           codes = await detector.detect(centerCanvas);
           if (codes.length > 0) {
             consecutiveFailuresRef.current = 0;
-            setDetectionQuality(90);
+            setDetectionQuality(95);
             handleScanned(codes[0].rawValue);
             return;
           }
         }
 
-        // Attempt 4: Small center region (most critical area)
+        // Attempt 3: Enhanced contrast for better visibility
+        const enhancedCanvas = document.createElement('canvas');
+        enhancedCanvas.width = canvas.width;
+        enhancedCanvas.height = canvas.height;
+        const enhancedCtx = enhancedCanvas.getContext('2d');
+        if (enhancedCtx) {
+          enhancedCtx.drawImage(canvas, 0, 0);
+          enhanceImageForQR(enhancedCtx, enhancedCanvas);
+          
+          codes = await detector.detect(enhancedCanvas);
+          if (codes.length > 0) {
+            consecutiveFailuresRef.current = 0;
+            setDetectionQuality(85);
+            handleScanned(codes[0].rawValue);
+            return;
+          }
+        }
+
+        // Attempt 4: Small center region (targeted scan)
         const smallSize = Math.min(canvas.width, canvas.height) * 0.5;
         const smallStartX = (canvas.width - smallSize) / 2;
         const smallStartY = (canvas.height - smallSize) / 2;
@@ -346,14 +361,14 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
           codes = await detector.detect(smallCanvas);
           if (codes.length > 0) {
             consecutiveFailuresRef.current = 0;
-            setDetectionQuality(95);
+            setDetectionQuality(90);
             handleScanned(codes[0].rawValue);
             return;
           }
         }
 
-        // Attempt 5: Super contrast enhancement for poor lighting
-        if (consecutiveFailuresRef.current > 20) {
+        // Attempt 5: Super contrast enhancement for poor lighting (only if struggling)
+        if (consecutiveFailuresRef.current > 15) {
           const superEnhancedCanvas = document.createElement('canvas');
           superEnhancedCanvas.width = canvas.width;
           superEnhancedCanvas.height = canvas.height;
@@ -384,7 +399,8 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
         }
 
         consecutiveFailuresRef.current++;
-        setDetectionQuality(Math.max(0, 100 - consecutiveFailuresRef.current * 5));
+        // Smooth quality degradation: slower, more natural decline
+        setDetectionQuality(Math.max(0, 100 - Math.floor(Math.sqrt(consecutiveFailuresRef.current) * 8)));
       }
     } catch (_err: unknown) {
       consecutiveFailuresRef.current++;
@@ -398,6 +414,8 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
     setScannedDevice(null);
     setDetectionQuality(0);
     consecutiveFailuresRef.current = 0;
+    lastDetectionRef.current = '';
+    detectionDebounceRef.current = 0;
     
     try {
       const constraints: MediaStreamConstraints = {
@@ -425,14 +443,14 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
       setFocusStatus('Applying focus...');
       await applyAdvancedFocus(videoTrack);
 
-      // Continuous focus re-application every 1 second
+      // Continuous focus re-application every 2 seconds (reduced from 1s to avoid jitter)
       focusIntervalRef.current = setInterval(() => {
-        if (videoTrackRef.current) {
+        if (videoTrackRef.current && scannerActive) {
           applyAdvancedFocus(videoTrackRef.current).catch(() => {
             // Silently continue
           });
         }
-      }, 1000);
+      }, 2000);
 
       setScannerActive(true);
       animFrameRef.current = requestAnimationFrame(scanLoop);
