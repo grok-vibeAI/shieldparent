@@ -38,6 +38,39 @@ export default function App() {
   // Notification Banner triggers
   const [bannerAlert, setBannerAlert] = useState<string | null>(null);
 
+  // Auto-enroll device from QR scan URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const enrollType = params.get('enroll');
+    if (enrollType === 'device') {
+      const name = params.get('name') || 'Scanned Device';
+      const platform = (params.get('platform') as ManagedDevice['platform']) || 'Android';
+      const uuid = params.get('uuid') || `uuid-${Date.now()}`;
+      const ipAddress = params.get('ipAddress') || '192.168.1.100';
+      const newDevice: ManagedDevice = {
+        id: `dev_${Date.now()}`,
+        name,
+        platform,
+        status: 'Online',
+        screenLocked: false,
+        internetBlocked: false,
+        blockAdult: params.get('blockAdult') === 'true',
+        blockGambling: params.get('blockGambling') === 'true',
+        blockSocial: params.get('blockSocial') === 'true',
+        ipAddress,
+        uuid,
+        lastSeen: 'Just now',
+      };
+      setDevices(prev => {
+        const exists = prev.some(d => d.uuid === uuid);
+        return exists ? prev : [newDevice, ...prev];
+      });
+      setBannerAlert(`✅ Device "${name}" enrolled successfully via QR scan!`);
+      // Clean URL so refresh doesn't re-enroll
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
   // Background Telemetry Simulation to give dynamic feel
   useEffect(() => {
     if (!isVpnActive || remoteLocked || devices.length === 0) return;

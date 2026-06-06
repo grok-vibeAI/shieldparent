@@ -75,7 +75,7 @@ export function CompanionQrScanner({ onDeviceEnrolled, onCancel }: CompanionQrSc
   const parsePayload = (text: string): ManagedDevice => {
     let parsed: Partial<ManagedDevice> = {};
 
-    if (text.startsWith('guardiannet://') || text.startsWith('https://shieldparent.vercel.app/enroll')) {
+    if (text.startsWith('guardiannet://') || text.includes('shieldparent.vercel.app')) {
       const url = new URL(text.startsWith('guardiannet://') ? text.replace('guardiannet://', 'http://x/') : text);
       const p = url.searchParams;
       parsed = {
